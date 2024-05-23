@@ -24,6 +24,7 @@ library(dialects)
 library(biomaRt)
 library(ggpointdensity)
 library(viridis)
+library(VennDiagram)
 
 ############# Functions
 
@@ -402,6 +403,7 @@ iBAQ <- x_long %>%
   filter(!is.na(Intensity)) %>%
   filter(SampleID %in% meta3$SampleID) %>%
   left_join(., fasta2) %>%
+  filter(`Prev AA` %in% c("K", "R", "-", "M")) %>%
   dplyr::select(SampleID, Protein, `Protein ID`, Gene, Intensity, `Modified Sequence`,n) %>%
   group_by(SampleID, Protein) %>%
   mutate(iBAQ = sum(Intensity)/n) %>%
@@ -501,7 +503,7 @@ marker_prot <- iBAQ %>%
 #                     show.legend= F)+
 #   scale_color_viridis()+
 #   xlab("log(Copy Number)\n Present study")+
-#   ylab("log(Copy Number)\n Heinemann et al., 2021")
+#   ylab("log(Copy Number)\n Heinemann et al., 2021")+
 # ggsave("hildebrandt.png", height = 4.7, width = 8)
 
 
@@ -516,6 +518,7 @@ iBAQ2 <- x_long %>%
   filter(!is.na(Intensity)) %>%
   filter(SampleID %in% meta3$SampleID) %>%
   left_join(., fasta2) %>%
+  filter(`Prev AA` %in% c("K", "R", "-", "M")) %>%
   dplyr::select(SampleID, Protein, `Protein ID`, Gene, Intensity, `Modified Sequence`,n) %>%
   group_by(SampleID, Protein) %>%
   mutate(iBAQ = sum(Intensity)/n) %>%
@@ -538,7 +541,7 @@ iBAQ2 <- x_long %>%
 
 
 
-## Supplementary Figure S8
+# ## Supplementary Figure S8
 # iBAQ2 %>%
 #   ggplot()+
 #   aes(x = Type, y = Copy_Number)+
@@ -549,26 +552,25 @@ iBAQ2 <- x_long %>%
 #   theme(#legend.position = "none",
 #     panel.grid.major = element_blank())+
 #   xlab(NULL)+
-#   ylab("log(Copy Number)")
+#   ylab("log(Copy Number)")+
 #   ggsave("LHC_comparison.png", height = 4.7, width = 8)
 
 
 
 presentStudy_all <- iBAQ %>%
-  mutate(TAIR = gsub("\\..*","", TAIR )) %>%
-  filter(!is.na(TAIR)) %>%
-  pull(`TAIR`)
+  mutate(name = gsub("\\..*","", name )) %>%
+  pull(`name`)
 
 Hild_all <- comparison %>%
   pull(`TAIR`)
 
 
-# library(VennDiagram)
+
 ### Supplementary Figure S9A
 # venn.diagram(x = list(presentStudy_all, Hild_all),
 #              category.names = c("Protein" , "mRNA"),
-#              height = 4.7 , 
-#              width = 6 , 
+#              height = 4.7 ,
+#              width = 6 ,
 #              units = "in",
 #              resolution = 300,
 #              disable.logging = T,
@@ -582,8 +584,14 @@ Hild_all <- comparison %>%
 #              filename = "venn_compare.png",
 #              output = TRUE)
 
-
-
+# Supp_Table <- iBAQ %>%
+#   mutate(TAIR = gsub("\\..*","", TAIR )) %>%
+#   mutate(Hein = case_when(TAIR %in% Hild_all ~ "Present",
+#                           TRUE ~ "Not Present"))
+# 
+# 
+# ### Supplementary Table
+# write.csv(Supp_Table, file = "Supp_Table.csv")
 
 
 
@@ -681,8 +689,7 @@ data_diff@elementMetadata@listData <- data_diff@elementMetadata@listData %>%
 dep <- add_rejections(data_diff, alpha = 0.05, lfc = 0.5)
 
 
-data_results <- as.data.frame(dep@elementMetadata@listData)
-
+data_results <- as.data.frame(dep@elementMetadata@listData) 
 
 ### Supplementary Table 1
  # write.csv(data_results, file= "Supp_Table1.csv")
