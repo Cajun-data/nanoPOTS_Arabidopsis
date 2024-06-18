@@ -9,8 +9,7 @@ library(ggbreak)
 
 mod_pep <- read_tsv("combined_modified_peptide.tsv") %>%
   setnames(., gsub("nanoPOTs_Protoplasts_", "", names(.))) %>%
-  setnames(., gsub(" Intensity", "", names(.))) %>%
-  setnames(., gsub("_Protoplasts_spintest_", "", names(.)))
+  setnames(., gsub(" Intensity", "", names(.))) 
 
 meta <- mod_pep[,1:15]
 
@@ -33,7 +32,7 @@ Cell10 <- mod_pep %>%
 
 Cell10 <- Cell10 %>% remove_rownames %>% column_to_rownames(var="Modified Sequence")
 Cell10[Cell10 == 0] <- NA
-Cell10[,1:7] <- log2(Cell10[,1:7])
+Cell10[,1:4] <- log2(Cell10[,1:4])
 Cell10 <- as.data.frame(median_normalization(as.matrix(Cell10)))
 Cell10_long <- Cell10 %>%
   rownames_to_column(., "Modified Sequence") %>%
@@ -45,7 +44,7 @@ Cell3 <- mod_pep %>%
 
 Cell3 <- Cell3 %>% remove_rownames %>% column_to_rownames(var="Modified Sequence")
 Cell3[Cell3 == 0] <- NA
-Cell3[,1:7] <- log2(Cell3[,1:7])
+Cell3[,1:4] <- log2(Cell3[,1:4])
 Cell3 <- as.data.frame(median_normalization(as.matrix(Cell3)))
 Cell3_long <- Cell3 %>%
   rownames_to_column(., "Modified Sequence") %>%
@@ -58,7 +57,7 @@ Cell1 <- mod_pep %>%
 
 Cell1 <- Cell1 %>% remove_rownames %>% column_to_rownames(var="Modified Sequence")
 Cell1[Cell1 == 0] <- NA
-Cell1[,1:12] <- log2(Cell1[,1:12])
+Cell1[,1:8] <- log2(Cell1[,1:8])
 Cell1 <- as.data.frame(median_normalization(as.matrix(Cell1)))
 Cell1_long <- Cell1 %>%
   rownames_to_column(., "Modified Sequence") %>%
@@ -70,12 +69,9 @@ x_long <- rbind(Cell10_long,Cell3_long,Cell1_long) %>%
                            grepl("3cell", SampleID) ~ "3",
                            grepl("1cell", SampleID) ~ "1")) %>%
   mutate(Intensity = 2^Intensity) %>%
-  filter(!is.na(Intensity)) %>%
-  mutate(isnanoSPLITS = case_when(grepl("nanoSPLITs", SampleID) ~ "Yes",
-                                  T ~ "No"))
+  filter(!is.na(Intensity))
 
 xmed <- x_long %>%
-  filter(isnanoSPLITS == "No") %>%
   filter(!is.na(Intensity)) %>%
   group_by(Cells, `Modified Sequence`) %>%
   add_count(name = "Obs") %>%
@@ -90,7 +86,6 @@ xmed <- x_long %>%
 
 # Figure 1B
 # plot <- x_long %>%
-#   filter(isnanoSPLITS == "No") %>%
 #   filter(!is.na(Intensity)) %>%
 #   group_by(Cells, `Modified Sequence`) %>%
 #   add_count(name = "Obs") %>%
@@ -130,7 +125,6 @@ xmed <- x_long %>%
 
 
 x_long %>%
-  filter(isnanoSPLITS == "No") %>%
   group_by(Cells) %>%
   summarize(log2(median(Intensity))) %>%
   view()
@@ -165,12 +159,9 @@ protein_long <- protein %>%
                              grepl("3cell", SampleID) ~ "3",
                              grepl("1cell", SampleID) ~ "1")) %>%
     filter(!is.na(Intensity)) %>%
-  mutate(isnanoSPLITS = case_when(grepl("nanoSPLITs", SampleID) ~ "Yes",
-                                  T ~ "No")) %>%
   mutate(Intensity = 2^Intensity)
 
 protein_long %>%
-  filter(isnanoSPLITS == "No") %>%
   group_by(Cells) %>%
   summarize(log2(median(Intensity))) %>%
   view()
@@ -178,7 +169,6 @@ protein_long %>%
 
 ### Figure 1C
 # protein_long %>%
-#   filter(isnanoSPLITS == "No") %>%
 #   ggplot()+
 #   aes(x = fct_relevel(Cells, "10", "3", "1"),
 #       y = log2(Intensity), fill = fct_relevel(Cells, "10", "3", "1"))+
@@ -204,7 +194,6 @@ protein_long %>%
 #   ggsave(file = "log2_LFQensities_FragPipe.png", width = 8, height = 4.7)
 #   
   x_peptide <- x_long %>%
-    filter(isnanoSPLITS == "No") %>%
     distinct(SampleID, `Modified Sequence`, Cells) %>%
     group_by(SampleID) %>%
     add_count(name = "n") %>%
@@ -214,7 +203,6 @@ protein_long %>%
 
 
   x_pepgene <- protein_long %>%
-    filter(isnanoSPLITS == "No") %>%
     filter(!is.na(Intensity)) %>%
     distinct(SampleID,Protein, Cells) %>%
     group_by(SampleID) %>%
@@ -256,10 +244,9 @@ protein_long %>%
   
   
   corx <- protein_long %>%
-    filter(isnanoSPLITS == "No") %>%
     filter(!is.na(Intensity)) %>%
     mutate(Intensity = log2(Intensity)) %>%
-    select(-Cells, -isnanoSPLITS) %>%
+    select(-Cells) %>%
     spread(SampleID, Intensity) %>%
     ungroup() 
   
