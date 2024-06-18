@@ -6,8 +6,7 @@ library(ggplot2)
 
 mod_pep <- read_tsv("combined_modified_peptide.tsv") %>%
   setNames(., gsub("nanoPOTs_Protoplasts_", "", names(.))) %>%
-  setNames(., gsub(" Intensity", "", names(.))) %>%
-  setNames(., gsub("_Protoplasts_spintest_", "", names(.)))
+  setNames(., gsub(" Intensity", "", names(.))) 
 
 meta <- mod_pep[,1:15]
 
