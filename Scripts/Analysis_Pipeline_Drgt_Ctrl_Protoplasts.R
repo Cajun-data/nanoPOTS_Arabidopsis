@@ -486,7 +486,6 @@ marker_prot <- iBAQ %>%
 
 ### Supplementary Figure S9B
 # marker_prot %>%
-#   mutate(Copy_Number = Copy_Number*25800000000) %>%
 #   mutate(Mol_Fraction2 = Mol_Fraction2*25800000000) %>%
 #   ggscatter(x = "Copy_Number",
 #             y = "Mol_Fraction2",
