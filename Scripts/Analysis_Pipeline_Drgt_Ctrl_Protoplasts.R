@@ -86,7 +86,8 @@ reorder_mat <- function(mat, order){
 
 mod_pep <- read_tsv("combined_modified_peptide.tsv") %>%
   setNames(., gsub("nanoPOTs_Protoplasts_", "", names(.))) %>%
-  setNames(., gsub(" Intensity", "", names(.))) 
+  setNames(., gsub(" Intensity", "", names(.))) %>%
+  setNames(., gsub("_Protoplasts_spintest_", "", names(.)))
 
 meta <- mod_pep[,1:15]
 
@@ -103,9 +104,9 @@ meta_prot <- meta %>%
   dplyr::select(Protein, ID, `Entry Name`, name,Gene, `Protein Description`)
 
 missing_IDs <- read_delim("missingIDs.txt")
-listDatasets(useMart(biomart="plants_mart",host="plants.ensembl.org"))
 
-mart <- useMart(biomart="plants_mart",host="plants.ensembl.org", dataset = "athaliana_eg_gene")
+mart <- useEnsemblGenomes(biomart="plants_mart",
+                dataset = "athaliana_eg_gene")
 
 gene_list <- getBM(attributes = c(
   "tair_locus_model",
@@ -408,10 +409,11 @@ iBAQ <- x_long %>%
   mutate(iBAQ = sum(Intensity)/n) %>%
   distinct(SampleID, iBAQ, Protein, `Protein ID`, Gene) %>%
   filter(grepl("Ctrl", SampleID)) %>%
-  group_by(SampleID) %>%
-  mutate(Total = sum(iBAQ)) %>%
+  group_by(Protein) %>%
+  summarize(meanIBAQ = mean(iBAQ)) %>%
   ungroup() %>%
-  mutate(riBAQ = iBAQ/Total)  %>%
+  mutate(Total = sum(meanIBAQ)) %>%
+  mutate(riBAQ = meanIBAQ/Total)  %>%
   group_by(Protein) %>%
   mutate(Copy_Number = mean(riBAQ)*25800000000) %>%
   distinct(Protein, Copy_Number) %>%
@@ -484,25 +486,25 @@ marker_prot <- iBAQ %>%
 
 
 
-### Supplementary Figure S9B
-# marker_prot %>%
-#   mutate(Mol_Fraction2 = Mol_Fraction2*25800000000) %>%
-#   ggscatter(x = "Copy_Number",
-#             y = "Mol_Fraction2",
-#             add = "reg.line",
-#             color = NA,
-#             conf.int = T,
-#             add.params = list(color = "black")
-#   )+
-#   stat_cor(method="pearson")+
-#   yscale("log10", .format = TRUE)+
-#   xscale("log10", .format = TRUE)+
-#   geom_pointdensity(size = 2,
-#                     show.legend= F)+
-#   scale_color_viridis()+
-#   xlab("log(Copy Number)\n Present study")+
-#   ylab("log(Copy Number)\n Heinemann et al., 2021")+
-# ggsave("hildebrandt.png", height = 4.7, width = 8)
+## Supplementary Figure S9B
+marker_prot %>%
+  mutate(Mol_Fraction2 = Mol_Fraction2*25800000000) %>%
+  ggscatter(x = "Copy_Number",
+            y = "Mol_Fraction2",
+            add = "reg.line",
+            color = NA,
+            conf.int = T,
+            add.params = list(color = "black")
+  )+
+  stat_cor(method="pearson")+
+  yscale("log10", .format = TRUE)+
+  xscale("log10", .format = TRUE)+
+  geom_pointdensity(size = 2,
+                    show.legend= F)+
+  scale_color_viridis()+
+  xlab("log(Copy Number)\n Present study")+
+  ylab("log(Copy Number)\n Heinemann et al., 2021")+
+ggsave("hildebrandt.png", height = 4.7, width = 8)
 
 
 
@@ -785,7 +787,7 @@ protoP_wide <- protein_long2 %>%
   group_by(name) %>% 
   add_count(name = "n") %>%
   filter(n >= 87*0.9) %>% 
-  dplyr::select(-n) %>%
+  dplyr::select(-n) %>% 
   spread(SampleID, Intensity) %>% 
   column_to_rownames(var= "name")
 
@@ -798,21 +800,33 @@ protoP_impute <-  DreamAI(protoP_wide, k = 10, maxiter_MF = 10, ntree = 100,
 
 protoP_impute <- as.data.frame(protoP_impute$Ensemble)
 
-pca_j<- PCAtools::pca(protoP_impute, scale = TRUE, center = T)
+meta_pca <- meta_final %>%
+  filter(SampleID %in% colnames(protoP_impute)) %>%
+  arrange(match(SampleID, colnames(protoP_impute))) %>%
+  column_to_rownames(var = "SampleID") %>%
+  dplyr::select(Group1,n) %>%
+  mutate(across(where(is.character), as.factor)) 
 
-Group <- meta_final$Group1
+pca_j<- PCAtools::pca(protoP_impute, metadata = meta_pca, scale = TRUE, center = T)
+
+Group <- meta_pca$Group1
+
+eigencorplot(pca_j,
+             components = getComponents(pca_j, 1:11), 
+             metavars = colnames(meta_pca),
+             scale = F)
 
 ############ Figure 4A
-# PCAtools::biplot(pca_j, x = "PC1", y =  "PC2", lab = Group,
+# PCAtools::biplot(pca_j, x = "PC1", y =  "PC5", lab = Group,
 #                  showLoadings = F,
 #                  ntopLoadings = 5,
 #                  labSize = 0, drawConnectors = FALSE,
 #                  legendPosition = "right",
 #                  encircle = TRUE
 # )+
-#   theme_bw(base_size = 12)+
+#   theme_bw(base_size = 12)
 #   ggsave("PCA_postcluster.png", height = 6, width = 7)
-# 
+
 
 ################ Volcano plot, Figure 4B and Supplementary Figure S10
 term_up <- gostres$result %>%
@@ -984,7 +998,7 @@ VB_cor <- fast_cor(t(VB), method = "pearson")
 #### 19 is optimal, VII
 
 clustVB_summary <- Clust_compare(VB,
-                                 clusterNumbers= c(18:20),
+                                 clusterNumbers= c(19),
                                  nameAlgorithm = c("mclust"
                                  ),
                                  models = "VII",
@@ -1176,7 +1190,7 @@ row_ha = rowAnnotation(AnnotationG = index1$DifferentialA,
 
 
 
-leaf_table <- clustVB_summary2[[3]]
+leaf_table <- clustVB_summary[[3]]
 
 cluster_size <- clust_order2 %>%
   group_by(Cluster) %>%
@@ -1186,23 +1200,28 @@ cluster_size <- clust_order2 %>%
   distinct(Cluster, n1, n2)
 
 
-# Figure 5B
+#Figure 5B
 # leaf_table %>%
-#   mutate(term_name = case_when(GO_Cluster == 15 ~ "ATPase activity",
-#                                TRUE ~ term_name)) %>%
+#  # mutate(term_name = case_when(GO_Cluster == 15 ~ "ATPase activity",
+#  #                              TRUE ~ term_name)) %>%
 #   rename(Cluster = GO_Cluster) %>%
 #   left_join(., cluster_size) %>%
 #   # mutate(`Percent Annotated` = intersection_size/n*100) %>%
 #   #mutate(precision = round(precision, digits = 2)) %>%
-#   mutate(p_value = round(-log10(p_value),digits = 2)) %>%
-#   dplyr::select(Cluster, n1, intersection_size, term_name,
+#   mutate(p_value = round(-log10(p_value),digits = 2))  %>%
+#   dplyr::select(Cluster, n1, intersection_size, source, term_name,
 #                 p_value) %>%
+#   mutate(term_name = gsub(",.*", "", term_name),
+#          source = gsub(",.*", "", source)) %>%
 #   rename(`Cluster Size` = n1) %>%
-#   rename(`Gene Ontological Term` = term_name) %>%
+#   mutate(GO = paste(source,term_name, sep = " - ")) %>%
+#   rename(`Gene Ontological Term` = GO) %>%
 #   rename(`Proteins Annotated` = intersection_size) %>%
 #   rename(`-log10(p-value)` = p_value) %>%
 #   arrange(desc(factor(Cluster,
 #                       levels = rev(clust_order_f$Cluster)))) %>%
+#   dplyr::select(Cluster, `Cluster Size`, `Proteins Annotated`,
+#                 `Gene Ontological Term`, `-log10(p-value)`) %>%
 #   gt() %>%
 #   data_color(columns =  `-log10(p-value)`,
 #              palette = "viridis") %>%
@@ -1210,7 +1229,7 @@ cluster_size <- clust_order2 %>%
 #              palette = colrs2,
 #              ordered = T) %>%
 #   tab_style(
-#     style = cell_borders(sides = "all", 
+#     style = cell_borders(sides = "all",
 #                          color = "#000000",
 #                          style = "solid",
 #                          weight = px(1)),
@@ -1219,7 +1238,8 @@ cluster_size <- clust_order2 %>%
 #     align = "center",
 #     columns = everything()
 #   ) %>%
-#   gtsave("VB_Cell_Cluster_table2.png",
+#   tab_options(table.font.size = 23) %>%
+#   gtsave("VB_Cell_Cluster_table_fontadjust_update.png",
 #          expand = 30)
 
 
@@ -1229,7 +1249,7 @@ clust_order3 <- colrs2 %>%
   full_join(., clust_order2)
 
 ## Supplementary Table S5
-#write.csv(clust_order3, file = "TableS5.csv")
+#write.csv(clust_order3, file = "TableS5_updated.csv")
 
 
 ########################
@@ -1248,28 +1268,29 @@ GO_Figure <- clustVB_summary[["VII_clusters_19_ALL_GO_terms"]] %>%
                                         "7",
                                         "11"))) %>%
   ungroup() %>%
-  arrange(GO_Cluster)
+  arrange(GO_Cluster) %>%
+  mutate(GO = paste(source,term_name, sep = "\n")) 
 
 
 
 ######## Figure 5C
-# png("GO_Figure.png", height = 2, width = 5,
-#     units = "in",
-#     res = 300)
-# GO_Figure %>%
-#   ggplot()+
-#   aes(y = GO_Cluster, x = term_name,
-#       color = -log10(`p_value`))+
-#   geom_point(size = 8)+
-#   scale_color_viridis_c()+
-#   ylab("")+
-#   xlab(NULL)+
-#   theme_bw(base_size = 8)+
-#   theme(legend.position = "bottom")
-# # ggplot2::facet_grid(source~.,
-# #                      space = "free_y",
-# #                     scales = "free_y", switch = "y")
-# dev.off()
+png("GO_Figure.png", height = 2.25, width = 5.5,
+    units = "in",
+    res = 300)
+GO_Figure %>%
+  ggplot()+
+  aes(y = GO_Cluster, x = fct_relevel(GO, term_name),
+      color = -log10(`p_value`))+
+  geom_point(size = 8)+
+  scale_color_viridis_c()+
+  ylab("")+
+  xlab(NULL)+
+  theme_bw(base_size = 8)+
+  theme(legend.position = "bottom")
+# ggplot2::facet_grid(source~.,
+#                      space = "free_y",
+#                     scales = "free_y", switch = "y")
+dev.off()
 
 
 
@@ -1284,18 +1305,18 @@ GO_Figure <- clustVB_summary[["VII_clusters_19_ALL_GO_terms"]] %>%
 ########################
 
 ### Supplementary Table S4
-# TableS4 <- clustVB_summary[[2]] %>%
-#   rename(Cluster = GO_Cluster) %>%
-#   arrange(desc(factor(Cluster,
-#                       levels = rev(clust_order_f$Cluster))),
-#           p_value)
-# 
-# TableS4 <- colrs2 %>%
-#   as.data.frame() %>%
-#   rownames_to_column(var = "Cluster") %>%
-#   full_join(., TableS4)
-# 
-# write.csv(TableS4, file = "TableS4.csv")
+TableS4 <- clustVB_summary[[2]] %>%
+  rename(Cluster = GO_Cluster) %>%
+  arrange(desc(factor(Cluster,
+                      levels = rev(clust_order_f$Cluster))),
+          p_value)
+
+TableS4 <- colrs2 %>%
+  as.data.frame() %>%
+  rownames_to_column(var = "Cluster") %>%
+  full_join(., TableS4)
+
+write.csv(TableS4, file = "TableS4_updated.csv")
 
 ######## Control 30% correlations
 
